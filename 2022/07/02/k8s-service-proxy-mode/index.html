@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+  <head>
+    <meta charset="utf8" />
+    <meta name="viewport" content="initial-scale=1.0, width=device-width" />
+    <title>
+      
+        service代理模式总结 | sysucjl.github.io
+      
+    </title>
+    <meta name="description" content=""/>
+    <meta name="keywords" content=""/>
+    
+      <link rel="apple-touch-icon"
+            sizes="180x180"
+            href="/images/apple-touch-icon.png"/>
+    
+    
+      <link rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="/images/favicon-32x32.png"/>
+    
+    
+      <link rel="icon"
+            type="image/png"
+            sizes="16x16"
+            href="/images/favicon-16x16.png"/>
+    
+    
+      <link rel="mask-icon"
+            href="/images/logo.svg"
+            color=""/>
+    
+    
+    <link rel="stylesheet" type="text/css" href="/css/layout.css"/>
+    
+    
+  <link rel="stylesheet" type="text/css" href="/css/post.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css"/>
+
+  <meta name="generator" content="Hexo 6.3.0"></head>
+  <body>
+    <div class="head">
+      <div class="nav">
+        <a href="/" class="nav-logo">
+          <img alt="logo" height="60px" width="60px" src="/images/logo.svg" />
+        </a>
+        <input id="navBtn" type="checkbox"/>
+        <div class="nav-menu">
+          
+            
+              <a class="nav-menu-item" href="/developer">编程开发</a>
+            
+              <a class="nav-menu-item" href="/dailylife">生活日常</a>
+            
+          
+        </div>
+        <label class="nav-btn" for="navBtn"></label>
+      </div>
+    </div>
+    <div class="body">
+      
+  <article class="post-content">
+    <div class="post-inner">
+      <div class="post-content__head">
+        <div class="post-title">service代理模式总结</div>
+        <div class="post-info">
+          
+  
+    <a href="/tags/k8s/" class="post-tag">#k8s</a>
+  
+    <a href="/tags/network/" class="post-tag">#network</a>
+  
+
+
+          <span class="post-date">2022-07-02</span>
+          
+            <!-- 不蒜子统计 -->
+            <span id="busuanzi_container_page_pv" style='display:none' class="<%= class_name %>">
+                  <i class="icon-smile icon"></i> 阅读数：<span id="busuanzi_value_page_pv"></span>次
+            </span>
+          
+        </div>
+      </div>
+      <aside class="toc-outer">
+        <ol class="post-toc">
+          
+        </ol>
+      </aside>
+      <div class="post-content__body">
+        
+          <div class="post-gallery">
+            
+          </div>
+        
+        <p>Service资源的工作内容主要分为两大部分：</p>
+<ol type="1">
+<li><p><strong>控制器模块</strong>：主要包括<code>ServiceController</code>和<code>EndpointController</code>。<code>ServiceController</code>其实只处理了负载均衡类型的<code>Service</code>对象，它会调用云服务商的
+API
+接口，不同的云服务商会实现不同的适配器来创建<code>LoadBalancer</code>类型的资源；<code>Service</code>对象通过selector和pod建立关联。k8s会根据service对象关联到pod的podIP信息组合成一个endpoint。那么<code>EndpointController</code>就是同时订阅了<code>Service</code>对象和Pod资源对象的增删事件，从而映射生成相应的Endpoint对象。</p></li>
+<li><p><strong>kube-porxy</strong>：每个节点的kube-proxy负责监听APIServer中<code>Service</code>和<code>Endpoint</code>对象的变化情况，然后将变化信息写入本地<code>userspace/iptables/ipvs</code>，从而为节点内的客户端提供流量的转发和负载均衡等功能。</p></li>
+</ol>
+<p>那么目前kube-proxy对Service的代理模式主要有：<code>Userspace</code>、<code>Iptables</code>和<code>IPVS</code>三种</p>
+<h3 id="userspace已淘汰"><strong>Userspace</strong>（已淘汰）</h3>
+<p>该模式下，所有的客户端请求service对象，先经过iptables重定向，然后再经过kube-proxy代理到pod（相当于kube-proxy充当路由器，转发请求到对应的pod），导致频繁切换内核/用户空间，因此可靠性和性能都不理想，早已被淘汰。
+<img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/userspace.png" /></p>
+<h3 id="iptables"><strong>Iptables</strong></h3>
+<p>该模式下直接使用 iptables
+转发当前节点上的全部流量，这种脱离了用户空间在内核空间中实现转发的方式能够极大地提高
+proxy 的效率，增加 kube-proxy
+的吞吐量。对于每个service，它都生成相应的iptables规则，这些规则捕获到service的clusterIP和port的流量，并将这些流量随机重定向到service后端Pod。对于每个endpoint对象，它生成选择后端Pod的iptables规则。但iptables
+因为它纯粹是为防火墙而设计的，并且基于内核规则列表，每次查询更新的复杂度是<span
+class="math inline">\(O(n)\)</span>，集群中service及其关联的pod越多，内核查询越繁忙。所以说，一直以来，基于
+iptables 的 Service 实现，都是制约 Kubernetes 项目承载更多量级的 Pod
+的主要障碍。 <img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/iptable.png" /></p>
+<h3 id="ipvs"><strong>IPVS</strong></h3>
+<p>在这种模式下，kube-proxy同样监听API
+Server中service和endpoint的变化情况，调用netlink接口创建相应的ipvs规则，并定期将ipvs规则与Kubernetes服
+Services和Endpoints同步，保证IPVS状态。当访问Services时，IPVS将流量定向到后端pod之一。IPVS代理模式基于类似于
+iptables 模式的 netfilter 挂钩函数，
+但是使用哈希表作为基础数据结构（查询复杂度是<span
+class="math inline">\(O(1)\)</span>），并且在内核空间中工作。这意味着，与
+iptables 模式下的 kube-proxy 相比，IPVS 模式下的 kube-proxy
+重定向通信的延迟要短，并且在同步代理规则时具有更好的性能。除此之外，相较于Iptables模式：</p>
+<ul>
+<li>ipvs 为大型集群提供了更好的可扩展性和性能</li>
+<li>ipvs 支持比 iptables
+更复杂的负载均衡算法（最小负载、最少连接、加权等等）</li>
+<li>ipvs 支持服务器健康检查和连接重试等功能</li>
+</ul>
+<p><img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/ipvs.png" /></p>
+
+      </div>
+
+    </div>
+  </article>
+  <div class="post__foot">
+    
+      <div class="like-author">
+  <input type="checkbox" id="likeCode" />
+  <div class="author-face">
+    <img height="100px"
+         width="100px"
+         id="front-face"
+         alt="author face"
+         src="/images/avatar.jpg"/>
+    <img height="100px"
+         width="100px"
+         id="back-face"
+         alt="like code"
+         src="/images/paycode.jpg"/>
+  </div>
+  <div class="like-text">“又摘桃花换酒钱”</div>
+  <label for="likeCode" class="like-btn">
+    <svg viewBox="0 0 1024 1024"
+         width="20px"
+         style="margin-right: 10px"
+         height="20px">
+      <path d="M466.88 908.96L113.824 563.296a270.08 270.08 0 0 1 0-387.392c108.8-106.56 284.896-106.56 393.696 0 1.504 1.472 2.976 2.944 4.448 4.48 1.472-1.536 2.944-3.008 4.448-4.48 108.8-106.56 284.896-106.56 393.696 0a269.952 269.952 0 0 1 34.016 347.072l-387.392 385.6a64 64 0 0 1-89.92 0.384z" p-id="13650" fill="#ee4242"/>
+    </svg>
+    喜欢作者
+  </label>
+</div>
+
+    
+    <div class="post-nav">
+  
+    <a class="post-nav-item-left" href="/2022/08/21/my-first-cat/">
+      <div class="text-align">
+        <svg t="1670570876164"
+             class="icon"
+             viewBox="0 0 1024 1024"
+             width="16"
+             height="16">
+          <path d="M384 512L731.733333 202.666667c17.066667-14.933333 19.2-42.666667 4.266667-59.733334-14.933333-17.066667-42.666667-19.2-59.733333-4.266666l-384 341.333333c-10.666667 8.533333-14.933333 19.2-14.933334 32s4.266667 23.466667 14.933334 32l384 341.333333c8.533333 6.4 19.2 10.666667 27.733333 10.666667 12.8 0 23.466667-4.266667 32-14.933333 14.933333-17.066667 14.933333-44.8-4.266667-59.733334L384 512z" p-id="14596"/>
+        </svg>
+        <span class="text-small">上一篇</span>
+      </div>
+      <div>我的第一只猫</div>
+    </a>
+  
+  <div class="vhr"></div>
+  
+    <div class="post-nav-item-right"></div>
+  
+</div>
+
+    
+    
+      <div id="gitalk-container"></div>
+    
+  </div>
+
+    </div>
+    <div class="foot">
+      <div class="foot-inner">
+        <div class="foot__head">
+          
+            <div class="foot-line">
+              <div class="matts">海</div><div class="matts">内</div><div class="matts">存</div><div class="matts">知</div><div class="matts">己</div>
+            </div>
+          
+            <div class="foot-line">
+              <div class="matts">天</div><div class="matts">涯</div><div class="matts">若</div><div class="matts">比</div><div class="matts">邻</div>
+            </div>
+          
+        </div>
+        <div class="foot__body">
+          
+            <div class="foot-item">
+              <div class="foot-item__head">朋友</div>
+              <div class="foot-item__body">
+                
+                  <div class="text">
+                    <img alt="link"
+                         height="20px"
+                         width="20px"
+                         src="/images/icon/icon-link.svg"/>
+                    <a class="foot-link" target="_blank" rel="noopener" href="https://github.com/hooozen/hexo-theme-tranquility">Theme Tranquility</a>
+                  </div>
+                
+                <div class="text">
+                  <img alt="link"
+                       height="20px"
+                       width="20px"
+                       src="/images/icon/icon-link+.svg"/>
+                  <a class="foot-link"
+                     href="mailto:cjl091454@gmail.com?subject=%E7%94%B3%E8%AF%B7%20Hozen.site%20%E7%9A%84%E5%8F%8B%E9%93%BE%E4%BD%8D%E7%BD%AE">
+                  申请友链</a>
+                </div>
+              </div>
+            </div>
+          
+          
+            <div class="foot-item">
+              <div class="foot-item__head">账号</div>
+              <div class="foot-item__body">
+                
+                  <div class="text">
+                    <img alt="link" height="20px" width="20px" src="/images/logo-github.svg"/>
+                    <a class="foot-link" target="_blank" rel="noopener" href="https://github.com/sysucjl">github</a>
+                  </div>
+                
+              </div>
+            </div>
+          
+          <div class="foot-item">
+            <div class="foot-item__head">联系</div>
+            <div class="foot-item__body">
+              <div class="text">
+                <img alt="link"
+                     height="20px"
+                     width="20px"
+                     src="/images/icon/icon-email.svg"/>
+                <a class="foot-link" href="mailto:cjl091454@gmail.com">cjl091454@gmail.com</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="copyright">
+          <a href="https://sysucjl.github.io">sysucjl.github.io</a> &nbsp;|&nbsp;由&nbsp;<a target="_blank" rel="noopener" href="https://hexo.io/">Hexo</a>&nbsp;及&nbsp;
+          <svg width="20" height="20" viewBox="0 0 725 725">
+            <path fill-rule="evenodd" fill="rgb(221, 221, 221)"
+            d="M145.870,236.632 L396.955,103.578 L431.292,419.44 L156.600,522.53 L145.870,236.632 Z" />
+            <path fill-rule="evenodd" fill="rgb(159, 159, 159)"
+            d="M396.955,103.578 L564.345,234.486 L611.558,513.469 L431.292,419.44 L396.955,103.578 Z" />
+            <path fill-rule="evenodd" fill="rgb(0, 0, 0)"
+            d="M431.292,419.44 L611.558,513.469 L358.327,595.18 L156.600,522.53 L431.292,419.44 Z" />
+          </svg>
+          <a target="_blank" rel="noopener" href="https://github.com/hooozen/hexo-theme-tranquility">致远</a>&nbsp;驱动
+          
+          
+                <!-- 不蒜子统计 -->
+                <span class="post-meta-divider">&nbsp;|&nbsp;</span>
+                <span id="busuanzi_container_site_pv">
+                        本站总访问量<span id="busuanzi_value_site_pv"></span>次
+                </span>
+                <span class="post-meta-divider">&nbsp;|&nbsp;</span>
+                <span id="busuanzi_container_site_uv" style='display:none'>
+                        本站访客数<span id="busuanzi_value_site_uv"></span>人
+                </span>
+                <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+          
+        </div>
+      </div>
+    </div>
+    
+      <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    
+  <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+<script type="text/javascript">
+  const param = JSON.parse('{"enable":true,"owner":"sysucjl","admin":"sysucjl","repo":"sysucjl.github.io","clientID":"987f8e22a6814b970ef6","clientSecret":"0b275b2504d0ab5a7485214be9ea7e1fe50c3f91","distractionFreeMode":false,"proxy":"https://cors-anywhere.azm.workers.dev/https://github.com/login/oauth/access_token","language":"zh-CN"}')
+  param.id = location.pathname
+  const gitalk = new Gitalk(param)
+  gitalk.render('gitalk-container')
+</script>
+
+  
+
+  </body>
+</html>
