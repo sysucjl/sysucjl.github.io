@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+  <head>
+    <meta charset="utf8" />
+    <meta name="viewport" content="initial-scale=1.0, width=device-width" />
+    <title>
+      
+        K8S API的使用和管理 | sysucjl.github.io
+      
+    </title>
+    <meta name="description" content=""/>
+    <meta name="keywords" content=""/>
+    
+      <link rel="apple-touch-icon"
+            sizes="180x180"
+            href="/images/apple-touch-icon.png"/>
+    
+    
+      <link rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="/images/favicon-32x32.png"/>
+    
+    
+      <link rel="icon"
+            type="image/png"
+            sizes="16x16"
+            href="/images/favicon-16x16.png"/>
+    
+    
+      <link rel="mask-icon"
+            href="/images/logo.svg"
+            color=""/>
+    
+    
+    <link rel="stylesheet" type="text/css" href="/css/layout.css"/>
+    
+    
+  <link rel="stylesheet" type="text/css" href="/css/post.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css"/>
+
+  <meta name="generator" content="Hexo 6.3.0"></head>
+  <body>
+    <div class="head">
+      <div class="nav">
+        <a href="/" class="nav-logo">
+          <img alt="logo" height="60px" width="60px" src="/images/logo.svg" />
+        </a>
+        <input id="navBtn" type="checkbox"/>
+        <div class="nav-menu">
+          
+            
+              <a class="nav-menu-item" href="/developer">编程开发</a>
+            
+              <a class="nav-menu-item" href="/dailylife">生活日常</a>
+            
+          
+        </div>
+        <label class="nav-btn" for="navBtn"></label>
+      </div>
+    </div>
+    <div class="body">
+      
+  <article class="post-content">
+    <div class="post-inner">
+      <div class="post-content__head">
+        <div class="post-title">K8S API的使用和管理</div>
+        <div class="post-info">
+          
+  
+    <a href="/tags/k8s/" class="post-tag">#k8s</a>
+  
+    <a href="/tags/GKV/" class="post-tag">#GKV</a>
+  
+
+
+          <span class="post-date">2022-07-15</span>
+          
+            <!-- 不蒜子统计 -->
+            <span id="busuanzi_container_page_pv" style='display:none' class="<%= class_name %>">
+                  <i class="icon-smile icon"></i> 阅读数：<span id="busuanzi_value_page_pv"></span>次
+            </span>
+          
+        </div>
+      </div>
+      <aside class="toc-outer">
+        <ol class="post-toc">
+          
+        </ol>
+      </aside>
+      <div class="post-content__body">
+        
+          <div class="post-gallery">
+            
+          </div>
+        
+        <h3 id="api-组和扩展"><strong>API</strong>
+<strong>组和扩展</strong></h3>
+<p>Kubernetes API 由不同的groups组成。这些组允许:</p>
+<ul>
+<li><p>可预测的 API 模式</p></li>
+<li><p>用户逐步采用功能</p></li>
+<li><p>独立定义资源范围和成熟度</p></li>
+<li><p>特定用例的唯一 API 路径（例如 pod/logs）</p></li>
+</ul>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/fe5eea9e-14f7-4773-9296-aba9627b4c99.png" style="zoom:40%;" /></p>
+<p>最初，Kubernetes API
+没有组(group)。此功能后来被命名为核心组。由于资源和版本号之间的紧密耦合，核心组中的资源被证明很难扩展。由于所有资源都在一条/apis/$VERSION/
+路径下，用户很难使用不同版本的资源并保持控制器之间的兼容性。开发 API
+需要更多版本来扩展资源，并且在添加第三方资源 (TPR) 之前无法扩展
+API。随着客户和供应商开始采用 TPR，各种缺点得到解决，随后TPR
+被CustomResourceDefinitions (CRD)取代 。</p>
+<p>我们可以使用 <code>apiextensions.k8s.io</code>
+组来创建自己的自定义资源
+(CR)，这将创建全新的组以供使用。这是一个示例，用于创建版本为 v1alpha1,
+资源类型为 sock , 组为 <code>mine.k8s.io</code>的对象。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">apiextensions.k8s.io/v1</span></span><br><span class="line"></span><br><span class="line"><span class="attr">kind:</span> <span class="string">CustomResourceDefinition</span></span><br><span class="line"></span><br><span class="line"><span class="attr">metadata:</span> </span><br><span class="line"></span><br><span class="line"> <span class="attr">name:</span> <span class="string">socks.mine.k8s.io</span></span><br><span class="line"></span><br><span class="line"> <span class="attr">spec:</span> </span><br><span class="line"></span><br><span class="line">  <span class="attr">group:</span> <span class="string">mine.k8s.io</span> </span><br><span class="line"></span><br><span class="line">  <span class="attr">versions:</span> </span><br><span class="line"></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">v1alpha1</span> </span><br><span class="line"></span><br><span class="line">  <span class="attr">names:</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">kind:</span> <span class="string">Sock</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">plural:</span> <span class="string">socks</span> </span><br><span class="line"></span><br><span class="line">   <span class="attr">scope:</span> <span class="string">Namespaced</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>通过向 Kubernetes API 提交少量数据，我们将获得以下 API：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="string">/apis/mine.k8s.io/v1alpha1/namespaces/$NAMESPACE/socks/$SOCK</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>我们可以通过kubectl get socks –all-namespaces命令，检查我们拥有哪些
+sock 资源。这些构造使 API
+足够灵活，可以针对未知用例进行扩展，并且足够简单。</p>
+<h3 id="crd-与聚合"><strong>CRD</strong> <strong>与聚合</strong></h3>
+<p>Custom Resources允许Kubernetes
+API识别自定义资源，而API路径是kubernetes-api主进程的一部分。我们还可以使用聚合
+API服务器扩展 Kubernetes API
+以声明特定路径（例如，<code>/apis/socks.mine.co/v1</code>）。两者主要区别在于聚合API将请求代理到Kubernetes服务端点。这意味着我们需要在集群内运行负责状态存储和版本生命周期的服务。</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/1b424a5f-c1a4-4749-99c0-a0fa63b23424.png" style="zoom:40%;" /></p>
+<h3 id="版本和生命周期"><strong>版本和生命周期</strong></h3>
+<p>版本作为 URL
+路径的一部分，并定义了关于事物如何从一个版本变化到另一个版本的指南。这些版本将显示在我们的
+yaml 文件中 apiVersion 中的组名之后。</p>
+<p>Kubernetes 遵循 alpha → beta → stable
+的成熟度进程，并带有一些额外的版本控制，因此资源可以迭代而无需进入下一个成熟度级别。</p>
+<ul>
+<li><p>Alpha API
+是实验性的。它们可能有错误和向后不兼容的更改。默认情况下它们不启用，你应该谨慎使用它们。</p></li>
+<li><p>Beta API
+已经过良好测试并默认启用。它们可以依赖于未来的功能，但它们的实现可能会根据用户反馈或可扩展性等约束而改变。</p></li>
+<li><p>稳定的 API
+。它们用一个版本（例如，v1）表示，并且它们的实现不应该在不更改版本号的情况下进行重大更改。</p></li>
+</ul>
+<p>当 Kubernetes API
+被弃用时，通常意味着它的一个版本不再可用。绝大多数弃用的发生是因为：</p>
+<ul>
+<li><p>资源方案更改（例如，v1beta1 → v1beta2）。</p></li>
+<li><p>API 变得更加稳定（例如，v1alpha2 → v1beta1）。</p></li>
+<li><p>组名称已更改（例如，入口从 extensions/v1beta1
+移至networking.k8s.io/v1beta1）。</p></li>
+</ul>
+<p>弃用意味着 API
+的某个版本已被删除，你需要在清单和资源中验证你使用的API版本是否正确。在某些情况下，你可能需要更改资源字段。如果一个API同时有多个版本可用，Kubernetes
+API可以为你默默地升级其中的一些。但是，你仍然应该确保拥有正确的资源方案——尤其是随着
+alpha API 的成熟，方案可能会在不同版本之间发生变化。</p>
+<h3 id="处理升级和弃用"><strong>处理升级和弃用</strong></h3>
+<p>对于创建的自定义资源，以下是处理升级和弃用的方法。首先是测试CR的升级，以确保控制器能够使用自定义资源以及
+Kubernetes API 组和版本正常运行。当针对scheme和 API
+版本更改更新控制器时，可能需要更新 CR
+定义，也可能不需要更新。<code>CustomResourceDefinitions</code>可以在其规范中定义多个版本。这种方法允许
+Kubernetes API 同时为多个版本提供服务。</p>
+<p>使用我们之前版本<code>v1alpha1</code> 的socks示例，如果我们还想提供
+API 的 <code>v1beta1</code> 版本，我们可以定义它：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">apiextensions.k8s.io/v1</span></span><br><span class="line"></span><br><span class="line"><span class="attr">kind:</span> <span class="string">CustomResourceDefinition</span></span><br><span class="line"></span><br><span class="line"><span class="attr">metadata:</span> </span><br><span class="line"></span><br><span class="line"> <span class="attr">name:</span> <span class="string">socks.mine.k8s.io</span></span><br><span class="line"></span><br><span class="line"> <span class="attr">spec:</span> </span><br><span class="line"></span><br><span class="line">  <span class="attr">group:</span> <span class="string">mine.k8s.io</span> </span><br><span class="line"></span><br><span class="line">  <span class="attr">versions:</span>  </span><br><span class="line"></span><br><span class="line">   <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">v1alpha1</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">served:</span> <span class="literal">true</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">storage:</span> <span class="literal">false</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">schema:</span> <span class="string">...</span>  </span><br><span class="line"></span><br><span class="line">   <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">v1beta1</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">served:</span> <span class="literal">true</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">storage:</span> <span class="literal">true</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">schema:</span> <span class="string">...</span> </span><br><span class="line"></span><br><span class="line">  <span class="attr">names:</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">kind:</span> <span class="string">Sock</span>  </span><br><span class="line"></span><br><span class="line">   <span class="attr">plural:</span> <span class="string">socks</span> </span><br><span class="line"></span><br><span class="line">   <span class="attr">scope:</span> <span class="string">Namespaced</span></span><br></pre></td></tr></table></figure>
+<p>上述定义了<code>/apsi/mine.k8s.io/v1alpha1/</code>和<code>/apis/mine.k8s.io/v1beta1/</code>将同时提供API服务。当一个新的“sock”对象被创建时，它会作为
+v1beta1 存储在 etcd
+中，因为<code>storage: true</code>在v1beta1版本下。与此同时，etcd
+中只能存储一个版本。</p>
+<p>如果你的版本方案有更改，则需要在将资源提交给 API
+时对其进行修改。此步骤通过转换 webhook处理 。webhook
+负责读取资源并将方案转换为不同的版本并将其发送回 API
+服务器。你可以像这样将转换 webhook 规范添加到你的 CR：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">conversion: strategy: Webhook webhook: clientConfig: url:</span> <span class="string">&quot;https://socks.converter.example/convert-me&quot;</span></span><br></pre></td></tr></table></figure>
+<p>任何时候在 Kubernetes API 服务器中创建 sock
+资源时，其规范都会发送到指定的 URL 进行转换。转换 webhook
+应该对资源执行任何必要的操作，并将其作为 ConversionReview 对象发送回 API
+服务器。使用 webhooks 进行转换可以非常灵活地管理 CR
+生命周期，并让你可以根据需要缓慢地从一个版本迁移到另一个版本。</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/120ef243-ce05-43a8-8282-ed185fb200a2.png" style="zoom:50%;" /></p>
+<p>更新所有资源后，你可以通过在 CR 定义版本中使用
+<code>deprecated: true</code>来弃用旧版本。不推荐使用的版本仍将由 API
+提供服务，但当使用不推荐使用的版本将资源提交给 API
+服务器时，它们将打印警告。</p>
+
+      </div>
+
+    </div>
+  </article>
+  <div class="post__foot">
+    
+      <div class="like-author">
+  <input type="checkbox" id="likeCode" />
+  <div class="author-face">
+    <img height="100px"
+         width="100px"
+         id="front-face"
+         alt="author face"
+         src="/images/avatar.jpg"/>
+    <img height="100px"
+         width="100px"
+         id="back-face"
+         alt="like code"
+         src="/images/paycode.jpg"/>
+  </div>
+  <div class="like-text">“又摘桃花换酒钱”</div>
+  <label for="likeCode" class="like-btn">
+    <svg viewBox="0 0 1024 1024"
+         width="20px"
+         style="margin-right: 10px"
+         height="20px">
+      <path d="M466.88 908.96L113.824 563.296a270.08 270.08 0 0 1 0-387.392c108.8-106.56 284.896-106.56 393.696 0 1.504 1.472 2.976 2.944 4.448 4.48 1.472-1.536 2.944-3.008 4.448-4.48 108.8-106.56 284.896-106.56 393.696 0a269.952 269.952 0 0 1 34.016 347.072l-387.392 385.6a64 64 0 0 1-89.92 0.384z" p-id="13650" fill="#ee4242"/>
+    </svg>
+    喜欢作者
+  </label>
+</div>
+
+    
+    <div class="post-nav">
+  
+    <a class="post-nav-item-left" href="/2022/08/21/my-first-cat/">
+      <div class="text-align">
+        <svg t="1670570876164"
+             class="icon"
+             viewBox="0 0 1024 1024"
+             width="16"
+             height="16">
+          <path d="M384 512L731.733333 202.666667c17.066667-14.933333 19.2-42.666667 4.266667-59.733334-14.933333-17.066667-42.666667-19.2-59.733333-4.266666l-384 341.333333c-10.666667 8.533333-14.933333 19.2-14.933334 32s4.266667 23.466667 14.933334 32l384 341.333333c8.533333 6.4 19.2 10.666667 27.733333 10.666667 12.8 0 23.466667-4.266667 32-14.933333 14.933333-17.066667 14.933333-44.8-4.266667-59.733334L384 512z" p-id="14596"/>
+        </svg>
+        <span class="text-small">上一篇</span>
+      </div>
+      <div>我的第一只猫</div>
+    </a>
+  
+  <div class="vhr"></div>
+  
+    <a class="post-nav-item-right" href="/2022/07/02/k8s-service-proxy-mode/">
+      <div class="text-align">
+        <span class="text-small">下一篇</span>
+        <svg t="1670570876164"
+             class="icon"
+             viewBox="0 0 1024 1024"
+             transform="scale(-1,-1)"
+             width="16"
+             height="16">
+          <path d="M384 512L731.733333 202.666667c17.066667-14.933333 19.2-42.666667 4.266667-59.733334-14.933333-17.066667-42.666667-19.2-59.733333-4.266666l-384 341.333333c-10.666667 8.533333-14.933333 19.2-14.933334 32s4.266667 23.466667 14.933334 32l384 341.333333c8.533333 6.4 19.2 10.666667 27.733333 10.666667 12.8 0 23.466667-4.266667 32-14.933333 14.933333-17.066667 14.933333-44.8-4.266667-59.733334L384 512z" p-id="14596"/>
+        </svg>
+      </div>
+      service代理模式总结
+    </a>
+  
+</div>
+
+    
+    
+      <div id="gitalk-container"></div>
+    
+  </div>
+
+    </div>
+    <div class="foot">
+      <div class="foot-inner">
+        <div class="foot__head">
+          
+            <div class="foot-line">
+              <div class="matts">海</div><div class="matts">内</div><div class="matts">存</div><div class="matts">知</div><div class="matts">己</div>
+            </div>
+          
+            <div class="foot-line">
+              <div class="matts">天</div><div class="matts">涯</div><div class="matts">若</div><div class="matts">比</div><div class="matts">邻</div>
+            </div>
+          
+        </div>
+        <div class="foot__body">
+          
+            <div class="foot-item">
+              <div class="foot-item__head">朋友</div>
+              <div class="foot-item__body">
+                
+                  <div class="text">
+                    <img alt="link"
+                         height="20px"
+                         width="20px"
+                         src="/images/icon/icon-link.svg"/>
+                    <a class="foot-link" target="_blank" rel="noopener" href="https://github.com/hooozen/hexo-theme-tranquility">Theme Tranquility</a>
+                  </div>
+                
+                <div class="text">
+                  <img alt="link"
+                       height="20px"
+                       width="20px"
+                       src="/images/icon/icon-link+.svg"/>
+                  <a class="foot-link"
+                     href="mailto:cjl091454@gmail.com?subject=%E7%94%B3%E8%AF%B7%20Hozen.site%20%E7%9A%84%E5%8F%8B%E9%93%BE%E4%BD%8D%E7%BD%AE">
+                  申请友链</a>
+                </div>
+              </div>
+            </div>
+          
+          
+            <div class="foot-item">
+              <div class="foot-item__head">账号</div>
+              <div class="foot-item__body">
+                
+                  <div class="text">
+                    <img alt="link" height="20px" width="20px" src="/images/logo-github.svg"/>
+                    <a class="foot-link" target="_blank" rel="noopener" href="https://github.com/sysucjl">github</a>
+                  </div>
+                
+              </div>
+            </div>
+          
+          <div class="foot-item">
+            <div class="foot-item__head">联系</div>
+            <div class="foot-item__body">
+              <div class="text">
+                <img alt="link"
+                     height="20px"
+                     width="20px"
+                     src="/images/icon/icon-email.svg"/>
+                <a class="foot-link" href="mailto:cjl091454@gmail.com">cjl091454@gmail.com</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="copyright">
+          <a href="https://sysucjl.github.io">sysucjl.github.io</a> &nbsp;|&nbsp;由&nbsp;<a target="_blank" rel="noopener" href="https://hexo.io/">Hexo</a>&nbsp;及&nbsp;
+          <svg width="20" height="20" viewBox="0 0 725 725">
+            <path fill-rule="evenodd" fill="rgb(221, 221, 221)"
+            d="M145.870,236.632 L396.955,103.578 L431.292,419.44 L156.600,522.53 L145.870,236.632 Z" />
+            <path fill-rule="evenodd" fill="rgb(159, 159, 159)"
+            d="M396.955,103.578 L564.345,234.486 L611.558,513.469 L431.292,419.44 L396.955,103.578 Z" />
+            <path fill-rule="evenodd" fill="rgb(0, 0, 0)"
+            d="M431.292,419.44 L611.558,513.469 L358.327,595.18 L156.600,522.53 L431.292,419.44 Z" />
+          </svg>
+          <a target="_blank" rel="noopener" href="https://github.com/hooozen/hexo-theme-tranquility">致远</a>&nbsp;驱动
+          
+          
+                <!-- 不蒜子统计 -->
+                <span class="post-meta-divider">&nbsp;|&nbsp;</span>
+                <span id="busuanzi_container_site_pv">
+                        本站总访问量<span id="busuanzi_value_site_pv"></span>次
+                </span>
+                <span class="post-meta-divider">&nbsp;|&nbsp;</span>
+                <span id="busuanzi_container_site_uv" style='display:none'>
+                        本站访客数<span id="busuanzi_value_site_uv"></span>人
+                </span>
+                <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+          
+        </div>
+      </div>
+    </div>
+    
+      <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    
+  <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+<script type="text/javascript">
+  const param = JSON.parse('{"enable":true,"owner":"sysucjl","admin":"sysucjl","repo":"sysucjl.github.io","clientID":"987f8e22a6814b970ef6","clientSecret":"0b275b2504d0ab5a7485214be9ea7e1fe50c3f91","distractionFreeMode":false,"proxy":"https://cors-anywhere.azm.workers.dev/https://github.com/login/oauth/access_token","language":"zh-CN"}')
+  param.id = location.pathname
+  const gitalk = new Gitalk(param)
+  gitalk.render('gitalk-container')
+</script>
+
+  
+
+  </body>
+</html>

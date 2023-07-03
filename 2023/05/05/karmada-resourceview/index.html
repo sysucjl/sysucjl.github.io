@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+  <head>
+    <meta charset="utf8" />
+    <meta name="viewport" content="initial-scale=1.0, width=device-width" />
+    <title>
+      
+        Karmada资源视图总结 | sysucjl.github.io
+      
+    </title>
+    <meta name="description" content=""/>
+    <meta name="keywords" content=""/>
+    
+      <link rel="apple-touch-icon"
+            sizes="180x180"
+            href="/images/apple-touch-icon.png"/>
+    
+    
+      <link rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="/images/favicon-32x32.png"/>
+    
+    
+      <link rel="icon"
+            type="image/png"
+            sizes="16x16"
+            href="/images/favicon-16x16.png"/>
+    
+    
+      <link rel="mask-icon"
+            href="/images/logo.svg"
+            color=""/>
+    
+    
+    <link rel="stylesheet" type="text/css" href="/css/layout.css"/>
+    
+    
+  <link rel="stylesheet" type="text/css" href="/css/post.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css"/>
+
+  <meta name="generator" content="Hexo 6.3.0"></head>
+  <body>
+    <div class="head">
+      <div class="nav">
+        <a href="/" class="nav-logo">
+          <img alt="logo" height="60px" width="60px" src="/images/logo.svg" />
+        </a>
+        <input id="navBtn" type="checkbox"/>
+        <div class="nav-menu">
+          
+            
+              <a class="nav-menu-item" href="/developer">编程开发</a>
+            
+              <a class="nav-menu-item" href="/dailylife">生活日常</a>
+            
+          
+        </div>
+        <label class="nav-btn" for="navBtn"></label>
+      </div>
+    </div>
+    <div class="body">
+      
+  <article class="post-content">
+    <div class="post-inner">
+      <div class="post-content__head">
+        <div class="post-title">Karmada资源视图总结</div>
+        <div class="post-info">
+          
+  
+    <a href="/tags/karmada/" class="post-tag">#karmada</a>
+  
+    <a href="/tags/karmada-search/" class="post-tag">#karmada-search</a>
+  
+
+
+          <span class="post-date">2023-05-05</span>
+          
+            <!-- 不蒜子统计 -->
+            <span id="busuanzi_container_page_pv" style='display:none' class="<%= class_name %>">
+                  <i class="icon-smile icon"></i> 阅读数：<span id="busuanzi_value_page_pv"></span>次
+            </span>
+          
+        </div>
+      </div>
+      <aside class="toc-outer">
+        <ol class="post-toc">
+          
+        </ol>
+      </aside>
+      <div class="post-content__body">
+        
+          <div class="post-gallery">
+            
+          </div>
+        
+        <h3 id="karmada-apiserver">1、karmada-apiserver</h3>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/b5cc3b1e-9573-4982-8ba7-4e9abe12ebe9.png" alt="b5cc3b1e-9573-4982-8ba7-4e9abe12ebe9" style="zoom:50%;" /></p>
+<p>以上图为例，我们通过karmada-apiserver发布一个deployment（记为dp）,分发到两个子集群，那么在clusterA和clusterB会各自生成一个子deployment（分别记为dp_A和dp_B）</p>
+<p>如果直接通过kubectl/client-go来访问karmada-apiserver，我们是只能查询到dp及其状态，而无法查询dp_A和dp_B，以及它们所创建的pods</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/bf622e83-35d7-40df-b922-1895e905efce.png" alt="bf622e83-35d7-40df-b922-1895e905efce" style="zoom:50%;" /></p>
+<p>目前，对于在元集群创建的工作负载，我们直接通过karmada-apiserver只能查询它们的（聚合后的）状态信息。但是，除了要获取聚合后的工作负载信息，我们也需要获取到子集群下的资源视图，例如查询、watch具体的pod。为此，karmada目前提供了另外两种方式：<code>karmada-aggregated-apiserver</code>和<code>karmada-search</code></p>
+<h3
+id="karmada-aggregated-apiserver">2、karmada-aggregated-apiserver</h3>
+<p>karmada提供了karmada-aggregated-apiserver
+组件，能聚合所有已注册的集群，并允许用户通过代理端点通过 Karmada
+访问成员集群。首先需要赋予用户权限，如下：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">rbac.authorization.k8s.io/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ClusterRole</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">cluster-proxy-clusterrole</span></span><br><span class="line"><span class="attr">rules:</span></span><br><span class="line"><span class="bullet">-</span> <span class="attr">apiGroups:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">&#x27;cluster.karmada.io&#x27;</span></span><br><span class="line">  <span class="attr">resources:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">clusters/proxy</span></span><br><span class="line">  <span class="attr">resourceNames:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">member1</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">member2</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">member3</span></span><br><span class="line">  <span class="attr">verbs:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">&#x27;*&#x27;</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">rbac.authorization.k8s.io/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ClusterRoleBinding</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">cluster-proxy-clusterrolebinding</span></span><br><span class="line"><span class="attr">roleRef:</span></span><br><span class="line">  <span class="attr">apiGroup:</span> <span class="string">rbac.authorization.k8s.io</span></span><br><span class="line">  <span class="attr">kind:</span> <span class="string">ClusterRole</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">cluster-proxy-clusterrole</span></span><br><span class="line"><span class="attr">subjects:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">kind:</span> <span class="string">User</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">&quot;system:admin&quot;</span></span><br></pre></td></tr></table></figure>
+<p>然后就能原来的api基础上增加固定前缀
+<code>/apis/[cluster.karmada.io/v1alpha1/clusters/&#123;clustername&#125;/proxy]</code>（将
+{clustername} 替换为实际集群名称），对相应子集群资源进行操作</p>
+<p>例如我们指定获取clusterA的pods，可以执行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl get --raw /apis/cluster.karmada.io/v1alpha1/clusters/member1/proxy/api/v1/pods</span><br></pre></td></tr></table></figure>
+<p>或者通过修改kubeconfig，把代理前缀加到apiserver地址后，进行查询：</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image2023-3-23_11-10-40.png" alt="image2023-3-23_11-10-40" style="zoom:40%;" /></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl get pod --kubeconfig karmada-apiserver.config</span><br></pre></td></tr></table></figure>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image2023-3-23_11-11-27.png" alt="image2023-3-23_11-11-27" style="zoom:50%;" /></p>
+<p>然而，这种方式每次只能指定获取某个子集群的资源。如果想获取所有子集群的信息，就只能遍历查询每一个子集群。</p>
+<h3 id="karmada-search">3、karmada-search</h3>
+<p>1.3版本后，karmada-search组件中引入了一个新的代理功能，允许用户以访问单集群的方式访问多集群中的资源，无论资源是否由Karmada管理，利用代理功能，用户可以统一通过Karmada控制面来操作成员集群中的资源。</p>
+<p>首先，我们需要使用ResourceRegistry
+API来指定缓存的资源类型以及数据源（目标集群），例如以下配置表示从member1
+和member2两个集群中缓存Pod与Node资源：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">search.karmada.io/v1alpha1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ResourceRegistry</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">proxy-sample</span></span><br><span class="line">  <span class="attr">spec:</span></span><br><span class="line">    <span class="attr">targetCluster:</span></span><br><span class="line">      <span class="attr">clusterNames:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">member1</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">member2</span></span><br><span class="line">      <span class="attr">resourceSelectors:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line">        <span class="attr">kind:</span> <span class="string">Pod</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line">        <span class="attr">kind:</span> <span class="string">Node</span></span><br></pre></td></tr></table></figure>
+<p>将该配置提交给karmada控制面之后，便可使用URL：<code>/apis/search.karmada.io/v1alpha1/proxying/karmada/proxy/api/v1/namespaces/default/pods</code>来进行集群资源访问。该URL中<code>/apis/search.karmada.io/v1alpha1/proxying/karmada/proxy</code>为固定前缀，后面部分与Kubernetes原生API路径完全一致。</p>
+<p>此时我们就能在karmada控制面，一次性地获取所有子集群的资源情况，例如：</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image2023-3-23_12-16-52.png" style="zoom:40%;" /></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl get pod --kubeconfig karmada-search.config</span><br></pre></td></tr></table></figure>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image2023-3-23_12-17-54.png" alt="image2023-3-23_12-17-54" style="zoom:50%;" /></p>
+<p>虽然这里kubectl返回显示的格式跟原生格式不一致，但对于client-go方式请求返回的格式跟原生api是一致。</p>
+<p>另外，在使用karmada-search时，有以下几个关注点：</p>
+<h4
+id="a.-对于resourceregistry中指定的资源karmada-search-api请求怎么处理同名资源">a.
+对于ResourceRegistry中指定的资源，karmada-search
+API请求怎么处理同名资源？</h4>
+<p>karmada-search的操作范围其实是*<strong>所有子集群*</strong>，而不支持在api请求指定子集群。那么在不同子集群里，同名资源就可能会出现。</p>
+<p>例如在每个子集群里创建一个名为web-test的pod，我们可以把它们全部正常list出来，如下：</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image2023-3-23_16-32-42.png" alt="image2023-3-23_16-32-42" style="zoom:50%;" /></p>
+<p>但当我们查看pod的详情时，因为不支持指定子集群，所以karmada-search将无法识别同名资源，从而抛出一个冲突错误，如下:</p>
+<figure>
+<img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image2023-3-23_16-37-23.png"
+alt="image2023-3-23_16-37-23" />
+<figcaption aria-hidden="true">image2023-3-23_16-37-23</figcaption>
+</figure>
+<p>因此，我们应该设计避免这种同名资源的出现。</p>
+<h4
+id="b.-对于resourceregistry中未指定的资源karmada-search-api请求怎么处理">b.
+对于ResourceRegistry中未指定的资源，karmada-search
+API请求怎么处理？</h4>
+<p>此时api请求会被<strong>重定向</strong>回karmada控制面。以上面的ResourceRegistry为例，只指定了pod和node资源，此时我们通过karmada-search
+api去获取deployment时，返回的是karmada控制面上的deploy列表，而不是两个子集群的。又或者创建一个service，此时创建请求只会重定向到karmada控制面并在控制面上创建资源。</p>
+<h3 id="总结">4、总结</h3>
+<p>首先，无论是karmada-apiserver、karmada-aggregated-apiserver和karmada-search，它们api返回的数据格式都是兼容原生k8
+api的，因此都能直接使用client-go，无需改动。</p>
+<ul>
+<li>karmada-apiserver：用于操作karmada控制面的资源视图，常用的工作负载资源都支持状态聚合</li>
+<li>karmada-aggregated-apiserver：用于操作指定子集群的资源视图，需要在api前缀指定
+{clustername} ，但不方便操作多个子集群</li>
+<li>karmada-search：配置ResourceRegistry，缓存所有子集群的资源，提供了全局的资源视图，但不能处理子集群间的同名资源</li>
+</ul>
+
+      </div>
+
+    </div>
+  </article>
+  <div class="post__foot">
+    
+      <div class="like-author">
+  <input type="checkbox" id="likeCode" />
+  <div class="author-face">
+    <img height="100px"
+         width="100px"
+         id="front-face"
+         alt="author face"
+         src="/images/avatar.jpg"/>
+    <img height="100px"
+         width="100px"
+         id="back-face"
+         alt="like code"
+         src="/images/paycode.jpg"/>
+  </div>
+  <div class="like-text">“又摘桃花换酒钱”</div>
+  <label for="likeCode" class="like-btn">
+    <svg viewBox="0 0 1024 1024"
+         width="20px"
+         style="margin-right: 10px"
+         height="20px">
+      <path d="M466.88 908.96L113.824 563.296a270.08 270.08 0 0 1 0-387.392c108.8-106.56 284.896-106.56 393.696 0 1.504 1.472 2.976 2.944 4.448 4.48 1.472-1.536 2.944-3.008 4.448-4.48 108.8-106.56 284.896-106.56 393.696 0a269.952 269.952 0 0 1 34.016 347.072l-387.392 385.6a64 64 0 0 1-89.92 0.384z" p-id="13650" fill="#ee4242"/>
+    </svg>
+    喜欢作者
+  </label>
+</div>
+
+    
+    <div class="post-nav">
+  
+    <div class="post-nav-item-left"></div>
+  
+  <div class="vhr"></div>
+  
+    <a class="post-nav-item-right" href="/2022/08/21/my-first-cat/">
+      <div class="text-align">
+        <span class="text-small">下一篇</span>
+        <svg t="1670570876164"
+             class="icon"
+             viewBox="0 0 1024 1024"
+             transform="scale(-1,-1)"
+             width="16"
+             height="16">
+          <path d="M384 512L731.733333 202.666667c17.066667-14.933333 19.2-42.666667 4.266667-59.733334-14.933333-17.066667-42.666667-19.2-59.733333-4.266666l-384 341.333333c-10.666667 8.533333-14.933333 19.2-14.933334 32s4.266667 23.466667 14.933334 32l384 341.333333c8.533333 6.4 19.2 10.666667 27.733333 10.666667 12.8 0 23.466667-4.266667 32-14.933333 14.933333-17.066667 14.933333-44.8-4.266667-59.733334L384 512z" p-id="14596"/>
+        </svg>
+      </div>
+      我的第一只猫
+    </a>
+  
+</div>
+
+    
+    
+      <div id="gitalk-container"></div>
+    
+  </div>
+
+    </div>
+    <div class="foot">
+      <div class="foot-inner">
+        <div class="foot__head">
+          
+            <div class="foot-line">
+              <div class="matts">海</div><div class="matts">内</div><div class="matts">存</div><div class="matts">知</div><div class="matts">己</div>
+            </div>
+          
+            <div class="foot-line">
+              <div class="matts">天</div><div class="matts">涯</div><div class="matts">若</div><div class="matts">比</div><div class="matts">邻</div>
+            </div>
+          
+        </div>
+        <div class="foot__body">
+          
+            <div class="foot-item">
+              <div class="foot-item__head">朋友</div>
+              <div class="foot-item__body">
+                
+                  <div class="text">
+                    <img alt="link"
+                         height="20px"
+                         width="20px"
+                         src="/images/icon/icon-link.svg"/>
+                    <a class="foot-link" target="_blank" rel="noopener" href="https://github.com/hooozen/hexo-theme-tranquility">Theme Tranquility</a>
+                  </div>
+                
+                <div class="text">
+                  <img alt="link"
+                       height="20px"
+                       width="20px"
+                       src="/images/icon/icon-link+.svg"/>
+                  <a class="foot-link"
+                     href="mailto:cjl091454@gmail.com?subject=%E7%94%B3%E8%AF%B7%20Hozen.site%20%E7%9A%84%E5%8F%8B%E9%93%BE%E4%BD%8D%E7%BD%AE">
+                  申请友链</a>
+                </div>
+              </div>
+            </div>
+          
+          
+            <div class="foot-item">
+              <div class="foot-item__head">账号</div>
+              <div class="foot-item__body">
+                
+                  <div class="text">
+                    <img alt="link" height="20px" width="20px" src="/images/logo-github.svg"/>
+                    <a class="foot-link" target="_blank" rel="noopener" href="https://github.com/sysucjl">github</a>
+                  </div>
+                
+              </div>
+            </div>
+          
+          <div class="foot-item">
+            <div class="foot-item__head">联系</div>
+            <div class="foot-item__body">
+              <div class="text">
+                <img alt="link"
+                     height="20px"
+                     width="20px"
+                     src="/images/icon/icon-email.svg"/>
+                <a class="foot-link" href="mailto:cjl091454@gmail.com">cjl091454@gmail.com</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="copyright">
+          <a href="https://sysucjl.github.io">sysucjl.github.io</a> &nbsp;|&nbsp;由&nbsp;<a target="_blank" rel="noopener" href="https://hexo.io/">Hexo</a>&nbsp;及&nbsp;
+          <svg width="20" height="20" viewBox="0 0 725 725">
+            <path fill-rule="evenodd" fill="rgb(221, 221, 221)"
+            d="M145.870,236.632 L396.955,103.578 L431.292,419.44 L156.600,522.53 L145.870,236.632 Z" />
+            <path fill-rule="evenodd" fill="rgb(159, 159, 159)"
+            d="M396.955,103.578 L564.345,234.486 L611.558,513.469 L431.292,419.44 L396.955,103.578 Z" />
+            <path fill-rule="evenodd" fill="rgb(0, 0, 0)"
+            d="M431.292,419.44 L611.558,513.469 L358.327,595.18 L156.600,522.53 L431.292,419.44 Z" />
+          </svg>
+          <a target="_blank" rel="noopener" href="https://github.com/hooozen/hexo-theme-tranquility">致远</a>&nbsp;驱动
+          
+          
+                <!-- 不蒜子统计 -->
+                <span class="post-meta-divider">&nbsp;|&nbsp;</span>
+                <span id="busuanzi_container_site_pv">
+                        本站总访问量<span id="busuanzi_value_site_pv"></span>次
+                </span>
+                <span class="post-meta-divider">&nbsp;|&nbsp;</span>
+                <span id="busuanzi_container_site_uv" style='display:none'>
+                        本站访客数<span id="busuanzi_value_site_uv"></span>人
+                </span>
+                <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+          
+        </div>
+      </div>
+    </div>
+    
+      <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    
+  <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+<script type="text/javascript">
+  const param = JSON.parse('{"enable":true,"owner":"sysucjl","admin":"sysucjl","repo":"sysucjl.github.io","clientID":"987f8e22a6814b970ef6","clientSecret":"0b275b2504d0ab5a7485214be9ea7e1fe50c3f91","distractionFreeMode":false,"proxy":"https://cors-anywhere.azm.workers.dev/https://github.com/login/oauth/access_token","language":"zh-CN"}')
+  param.id = location.pathname
+  const gitalk = new Gitalk(param)
+  gitalk.render('gitalk-container')
+</script>
+
+  
+
+  </body>
+</html>
