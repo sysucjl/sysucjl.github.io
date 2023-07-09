@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+  <head>
+    <meta charset="utf8" />
+    <meta name="viewport" content="initial-scale=1.0, width=device-width" />
+    <title>
+      
+        IP隧道介绍及演示 | sysucjl.github.io
+      
+    </title>
+    <meta name="description" content=""/>
+    <meta name="keywords" content=""/>
+    
+      <link rel="apple-touch-icon"
+            sizes="180x180"
+            href="/images/apple-touch-icon.png"/>
+    
+    
+      <link rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="/images/favicon-32x32.png"/>
+    
+    
+      <link rel="icon"
+            type="image/png"
+            sizes="16x16"
+            href="/images/favicon-16x16.png"/>
+    
+    
+      <link rel="mask-icon"
+            href="/images/logo.svg"
+            color=""/>
+    
+    
+    <link rel="stylesheet" type="text/css" href="/css/layout.css"/>
+    
+    
+  <link rel="stylesheet" type="text/css" href="/css/post.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css"/>
+
+  <meta name="generator" content="Hexo 6.3.0"></head>
+  <body>
+    <div class="head">
+      <div class="nav">
+        <a href="/" class="nav-logo">
+          <img alt="logo" height="60px" width="60px" src="/images/logo.svg" />
+        </a>
+        <input id="navBtn" type="checkbox"/>
+        <div class="nav-menu">
+          
+            
+              <a class="nav-menu-item" href="/developer">编程开发</a>
+            
+              <a class="nav-menu-item" href="/dailylife">生活日常</a>
+            
+          
+        </div>
+        <label class="nav-btn" for="navBtn"></label>
+      </div>
+    </div>
+    <div class="body">
+      
+  <article class="post-content">
+    <div class="post-inner">
+      <div class="post-content__head">
+        <div class="post-title">IP隧道介绍及演示</div>
+        <div class="post-info">
+          
+  
+    <a href="/tags/network/" class="post-tag">#network</a>
+  
+    <a href="/tags/CNI/" class="post-tag">#CNI</a>
+  
+    <a href="/tags/IPIP/" class="post-tag">#IPIP</a>
+  
+
+
+          <span class="post-date">2022-08-04</span>
+          
+            <!-- 不蒜子统计 -->
+            <span id="busuanzi_container_page_pv" style='display:none' class="<%= class_name %>">
+                  <i class="icon-smile icon"></i> 阅读数：<span id="busuanzi_value_page_pv"></span>次
+            </span>
+          
+        </div>
+      </div>
+      <aside class="toc-outer">
+        <ol class="post-toc">
+          
+        </ol>
+      </aside>
+      <div class="post-content__body">
+        
+          <div class="post-gallery">
+            
+          </div>
+        
+        <h3 id="一网络隧道介绍及原理">一、网络隧道介绍及原理</h3>
+<blockquote>
+<p>IP隧道是指一种可在两网络间用网际协议进行通信的通道。在该通道里，会先封装其他网络协议的数据包，之后再传输信息。</p>
+<p>IP隧道经常用于连接两个不是用路由直接链接的IP网络，IP隧道会通过底层路由协议来架构中间传输网络。若IP隧道与两个或多个IPSec一起使用时，可以创建虚拟专用网（Virtual
+Private
+Network，VPN），让二个或多个被公开网络（如因特网）隔开的私有网络彼此访问，另一个主要应用也是目前常用的，让各IPv6网络隔着IPv4网络上通信。</p>
+<p>IP隧道封装
+在IP隧道中，每个IP包、来源/目的地址信息都被封装在一个数据包中，该数据包用于实际物理网络传递。</p>
+<p>在源网络与传输网络的边界，以及传输网络和目的网络的边界，会用网关来创建跨网络的隧道端点（endpoint）。因此，IP隧道端点可以变成本地IP路由器，在源网络与目的网络间创建标准路由。端点会截取通过端点数据包的隧道协议报头及报尾，再转换为标准IP格式，与其他来源的数据包一样注入到隧道端点的IP栈（IP
+stack）上。 ——摘自维基百科</p>
+</blockquote>
+<h4 id="ip-tunnel-命令">1.1 ip tunnel 命令</h4>
+<p>Linux 原生支持多种三层隧道，其底层实现原理都是基于 tun
+设备。我们可以通过命令 <code>ip tunnel help</code> 查看 IP
+隧道的相关操作。</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image-20230708165420758.png" alt="image-20230708165420758" style="zoom:50%;" /></p>
+<p>可以从mode中看到， Linux系统原生支持ipip、gre、sit
+、isatap、vti五种隧道类型。此外还有一种：vxlan，
+vxlan的原理是封装以太网栈的方式实现了虚拟二层网络。</p>
+<ul>
+<li><code>ipip</code>：即 <code>IPv4 in IPv4</code>，在 IPv4
+报文的基础上再封装一个 IPv4 报文。</li>
+<li><code>gre</code>：即通用路由封装（<code>Generic Routing Encapsulation</code>），定义了在任意一种网络层协议上封装其他任意一种网络层协议的机制，IPv4
+和 IPv6 都适用。</li>
+<li><code>sit</code>：和 <code>ipip</code> 类似，不同的是
+<code>sit</code> 是用 IPv4 报文封装 IPv6 报文，即
+<code>IPv6 over IPv4</code>。</li>
+<li><code>isatap</code>：即站内自动隧道寻址协议（<code>Intra-Site Automatic Tunnel Addressing Protocol</code>），和
+<code>sit</code> 类似，也是用于 IPv6 的隧道封装。</li>
+<li><code>vti</code>：即虚拟隧道接口（<code>Virtual Tunnel Interface</code>），是
+cisco 提出的一种 <code>IPsec</code> 隧道技术。</li>
+<li>vxlan：虚拟二层网络，是应用最为广泛的overlay网络方案</li>
+</ul>
+<h4 id="隧道和协议封装">1.2 隧道和协议封装</h4>
+<p>ipip、gre、vxlan都是通过UDP协议封装报文来实现的。如图，以IPIP为例：TUN
+网络设备能将三层（IP
+网络数据包）数据包封装在另外一个三层数据包之中。当报文抵达隧道的对端，
+对端会进行解封装，
+解封装就是去掉封装加上去的一层后把报文交给Linux网络栈。</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/Snipaste_2023-07-08_17-05-24.png" alt="Snipaste_2023-07-08_17-05-24" style="zoom:50%;" /></p>
+<p>隧道的原理就是在一端封装另一端解封装，不同的隧道协议封包的开销也不一样。
+因为ipip、gre、vxlan都已经在内核中集成，所以封装和解封装都在内核态完成，
+避免了用户空间到内核空间的切换，大大的提升了效率。像<code>flannel</code>早期使用的隧道模式为自行实现的UDP封装，
+未集成在Linux内核，
+封装解封运行在用户态，而数据的交互和传递则在内核态完成，这就造成了为了传递数据，需要内核态和用户态的频繁切换，导致切换成本高昂。</p>
+<p>此外不同的隧道协议封包的包头大小，也会产生额外的开销：</p>
+<ul>
+<li>vxlan封装二层报文，额外开销（50 bytes），
+虽然额外开销变大了，但是vxlan是功能最强大的隧道模式，
+VXLAN的<code>VLAN ID</code>有24位（传统的<code>VLAN ID</code>只有12位）
+，可以支持千万级别的网络租户， 非常适用于大型网络。</li>
+<li>ipip封装三层报文，额外开销（20 bytes），
+不能像vxlan一样在一个网络里面划分多个租户（VLAN），但是开销最小，小型单一网络需求非常适用。</li>
+<li>gre则是通用封装，其理论上可以封装任何有效的三层协议类型，包括路由协议，额外开销：20
++ 4 bytes到16 bytes 开销适中，常用于VPN 技术。</li>
+</ul>
+<h3 id="二实践">二、实践</h3>
+<p>我们下面以 <code>ipip</code>
+作为例子，结合跨主机间的容器网络，来实践下 Linux 的隧道通信。</p>
+<h4 id="环境">2.1 环境</h4>
+<p>主机名=<code>k8s-node-2</code>，IP=<code>192.168.56.12</code>，容器网段=<code>172.20.0.0/24</code>，隧道虚拟设备地址(tun1)=<code>10.233.0.1/24</code></p>
+<p>主机名=<code>k8s-node-3</code>，IP=<code>192.168.56.13</code>，容器网段=<code>172.40.0.0/24</code>，隧道虚拟设备地址(tun2)=<code>10.233.0.2/24</code></p>
+<h4 id="创建容器网络">2.2 创建容器网络</h4>
+<h5 id="主机上执行">192.168.56.12主机上执行：</h5>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 新建一个容器网络</span></span><br><span class="line">docker network create --subnet=172.20.0.0/24 staticnet</span><br><span class="line"><span class="comment"># 运行一个容器</span></span><br><span class="line">docker run -it -d --name tunnel-test --net staticnet --ip 172.20.0.2 busybox /bin/sh</span><br></pre></td></tr></table></figure>
+<h5 id="主机上执行-1">192.168.56.13主机上执行：</h5>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 新建一个容器网络</span></span><br><span class="line">docker network create --subnet=172.40.0.0/24 staticnet</span><br><span class="line"><span class="comment"># 运行一个容器</span></span><br><span class="line">docker run -it -d --name tunnel-test --net staticnet --ip 172.40.0.2 busybox /bin/sh</span><br></pre></td></tr></table></figure>
+<p>此时，主机能ping通本地的容器IP，但ping不通跨主机的容器IP <img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image-20230709103732073.png" /></p>
+<p><img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image-20230709103942652.png" /></p>
+<h4 id="创建隧道互联">2.3 创建隧道互联</h4>
+<h5 id="主机上执行-2">192.168.56.12主机上执行：</h5>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 创建一个远程地址是192.168.56.13， 本端地址是192.168.56.12的ipip隧道， 虚拟设备：tun1</span></span><br><span class="line">ip tunnel add tun1 mode ipip remote 192.168.56.13 <span class="built_in">local</span> 192.168.56.12 ttl 64</span><br><span class="line"><span class="comment"># 启动设备</span></span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> tun1 up</span><br><span class="line"><span class="comment">#给设备添加一个IP</span></span><br><span class="line">ip addr add 10.233.0.1/24 dev tun1</span><br><span class="line"><span class="comment">#（如果没开启的话）开启路由转发</span></span><br><span class="line"><span class="built_in">echo</span> 1 &gt; /proc/sys/net/ipv4/ip_forward</span><br></pre></td></tr></table></figure>
+<h5 id="主机上执行-3">192.168.56.13主机上执行：</h5>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 创建一个远程地址是192.168.56.12， 本端地址是192.168.56.13的ipip隧道， 虚拟设备：tun2</span></span><br><span class="line">ip tunnel add tun2 mode ipip remote 192.168.56.12 <span class="built_in">local</span> 192.168.56.13 ttl 64</span><br><span class="line"><span class="comment"># 启动设备</span></span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> tun2 up</span><br><span class="line"><span class="comment">#给设备添加一个IP</span></span><br><span class="line">ip addr add 10.233.0.2/24 dev tun2</span><br><span class="line"><span class="comment"># （如果没开启的话）开启路由转发</span></span><br><span class="line"><span class="built_in">echo</span> 1 &gt; /proc/sys/net/ipv4/ip_forward</span><br></pre></td></tr></table></figure>
+<p>此时主机之间能相互ping通隧道ip。到此隧道已经建立，
+但是这只实现了端到端的网络互通，
+如果我们想要利用隧道实现整个网络的互通， 还需要进行路由的配置 <img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image-20230709111825543.png" /></p>
+<p><img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image-20230709111944072.png" /></p>
+<h4 id="配置容器网段的路由">2.3 配置容器网段的路由</h4>
+<h5 id="主机上执行-4">192.168.56.12主机上执行：</h5>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 将容器网络指向到对端</span></span><br><span class="line">ip route add 172.40.0.0/24 via 10.233.0.1 dev tun1</span><br></pre></td></tr></table></figure>
+<h5 id="主机上执行-5">192.168.56.13主机上执行：</h5>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 将容器网络指向到对端</span></span><br><span class="line">ip route add 172.20.0.0/16 via 10.233.0.2 dev tun2</span><br></pre></td></tr></table></figure>
+<p>至此已经通过隧道网络，实现了两台主机间的跨容器网段通信。 <img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image-20230709112126986.png" /></p>
+<p><img
+src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/image-20230709112152326.png" /></p>
+
+      </div>
+
+    </div>
+  </article>
+  <div class="post__foot">
+    
+      <div class="like-author">
+  <input type="checkbox" id="likeCode" />
+  <div class="author-face">
+    <img height="100px"
+         width="100px"
+         id="front-face"
+         alt="author face"
+         src="/images/avatar.jpg"/>
+    <img height="100px"
+         width="100px"
+         id="back-face"
+         alt="like code"
+         src="/images/paycode.jpg"/>
+  </div>
+  <div class="like-text">“又摘桃花换酒钱”</div>
+  <label for="likeCode" class="like-btn">
+    <svg viewBox="0 0 1024 1024"
+         width="20px"
+         style="margin-right: 10px"
+         height="20px">
+      <path d="M466.88 908.96L113.824 563.296a270.08 270.08 0 0 1 0-387.392c108.8-106.56 284.896-106.56 393.696 0 1.504 1.472 2.976 2.944 4.448 4.48 1.472-1.536 2.944-3.008 4.448-4.48 108.8-106.56 284.896-106.56 393.696 0a269.952 269.952 0 0 1 34.016 347.072l-387.392 385.6a64 64 0 0 1-89.92 0.384z" p-id="13650" fill="#ee4242"/>
+    </svg>
+    喜欢作者
+  </label>
+</div>
+
+    
+    <div class="post-nav">
+  
+    <a class="post-nav-item-left" href="/2022/08/21/my-first-cat/">
+      <div class="text-align">
+        <svg t="1670570876164"
+             class="icon"
+             viewBox="0 0 1024 1024"
+             width="16"
+             height="16">
+          <path d="M384 512L731.733333 202.666667c17.066667-14.933333 19.2-42.666667 4.266667-59.733334-14.933333-17.066667-42.666667-19.2-59.733333-4.266666l-384 341.333333c-10.666667 8.533333-14.933333 19.2-14.933334 32s4.266667 23.466667 14.933334 32l384 341.333333c8.533333 6.4 19.2 10.666667 27.733333 10.666667 12.8 0 23.466667-4.266667 32-14.933333 14.933333-17.066667 14.933333-44.8-4.266667-59.733334L384 512z" p-id="14596"/>
+        </svg>
+        <span class="text-small">上一篇</span>
+      </div>
+      <div>我的第一只猫</div>
+    </a>
+  
+  <div class="vhr"></div>
+  
+    <a class="post-nav-item-right" href="/2022/07/15/k8s-api-note/">
+      <div class="text-align">
+        <span class="text-small">下一篇</span>
+        <svg t="1670570876164"
+             class="icon"
+             viewBox="0 0 1024 1024"
+             transform="scale(-1,-1)"
+             width="16"
+             height="16">
+          <path d="M384 512L731.733333 202.666667c17.066667-14.933333 19.2-42.666667 4.266667-59.733334-14.933333-17.066667-42.666667-19.2-59.733333-4.266666l-384 341.333333c-10.666667 8.533333-14.933333 19.2-14.933334 32s4.266667 23.466667 14.933334 32l384 341.333333c8.533333 6.4 19.2 10.666667 27.733333 10.666667 12.8 0 23.466667-4.266667 32-14.933333 14.933333-17.066667 14.933333-44.8-4.266667-59.733334L384 512z" p-id="14596"/>
+        </svg>
+      </div>
+      K8S API的使用和管理
+    </a>
+  
+</div>
+
+    
+    
+      <div id="gitalk-container"></div>
+    
+  </div>
+
+    </div>
+    <div class="foot">
+      <div class="foot-inner">
+        <div class="foot__head">
+          
+            <div class="foot-line">
+              <div class="matts">海</div><div class="matts">内</div><div class="matts">存</div><div class="matts">知</div><div class="matts">己</div>
+            </div>
+          
+            <div class="foot-line">
+              <div class="matts">天</div><div class="matts">涯</div><div class="matts">若</div><div class="matts">比</div><div class="matts">邻</div>
+            </div>
+          
+        </div>
+        <div class="foot__body">
+          
+            <div class="foot-item">
+              <div class="foot-item__head">朋友</div>
+              <div class="foot-item__body">
+                
+                  <div class="text">
+                    <img alt="link"
+                         height="20px"
+                         width="20px"
+                         src="/images/icon/icon-link.svg"/>
+                    <a class="foot-link" target="_blank" rel="noopener" href="https://github.com/hooozen/hexo-theme-tranquility">Theme Tranquility</a>
+                  </div>
+                
+                <div class="text">
+                  <img alt="link"
+                       height="20px"
+                       width="20px"
+                       src="/images/icon/icon-link+.svg"/>
+                  <a class="foot-link"
+                     href="mailto:cjl091454@gmail.com?subject=%E7%94%B3%E8%AF%B7%20Hozen.site%20%E7%9A%84%E5%8F%8B%E9%93%BE%E4%BD%8D%E7%BD%AE">
+                  申请友链</a>
+                </div>
+              </div>
+            </div>
+          
+          
+            <div class="foot-item">
+              <div class="foot-item__head">账号</div>
+              <div class="foot-item__body">
+                
+                  <div class="text">
+                    <img alt="link" height="20px" width="20px" src="/images/logo-github.svg"/>
+                    <a class="foot-link" target="_blank" rel="noopener" href="https://github.com/sysucjl">github</a>
+                  </div>
+                
+              </div>
+            </div>
+          
+          <div class="foot-item">
+            <div class="foot-item__head">联系</div>
+            <div class="foot-item__body">
+              <div class="text">
+                <img alt="link"
+                     height="20px"
+                     width="20px"
+                     src="/images/icon/icon-email.svg"/>
+                <a class="foot-link" href="mailto:cjl091454@gmail.com">cjl091454@gmail.com</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="copyright">
+          <a href="https://sysucjl.github.io">sysucjl.github.io</a> &nbsp;|&nbsp;由&nbsp;<a target="_blank" rel="noopener" href="https://hexo.io/">Hexo</a>&nbsp;及&nbsp;
+          <svg width="20" height="20" viewBox="0 0 725 725">
+            <path fill-rule="evenodd" fill="rgb(221, 221, 221)"
+            d="M145.870,236.632 L396.955,103.578 L431.292,419.44 L156.600,522.53 L145.870,236.632 Z" />
+            <path fill-rule="evenodd" fill="rgb(159, 159, 159)"
+            d="M396.955,103.578 L564.345,234.486 L611.558,513.469 L431.292,419.44 L396.955,103.578 Z" />
+            <path fill-rule="evenodd" fill="rgb(0, 0, 0)"
+            d="M431.292,419.44 L611.558,513.469 L358.327,595.18 L156.600,522.53 L431.292,419.44 Z" />
+          </svg>
+          <a target="_blank" rel="noopener" href="https://github.com/hooozen/hexo-theme-tranquility">致远</a>&nbsp;驱动
+          
+          
+                <!-- 不蒜子统计 -->
+                <span class="post-meta-divider">&nbsp;|&nbsp;</span>
+                <span id="busuanzi_container_site_pv">
+                        本站总访问量<span id="busuanzi_value_site_pv"></span>次
+                </span>
+                <span class="post-meta-divider">&nbsp;|&nbsp;</span>
+                <span id="busuanzi_container_site_uv" style='display:none'>
+                        本站访客数<span id="busuanzi_value_site_uv"></span>人
+                </span>
+                <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+          
+        </div>
+      </div>
+    </div>
+    
+      <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    
+  <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+<script type="text/javascript">
+  const param = JSON.parse('{"enable":true,"owner":"sysucjl","admin":"sysucjl","repo":"sysucjl.github.io","clientID":"987f8e22a6814b970ef6","clientSecret":"0b275b2504d0ab5a7485214be9ea7e1fe50c3f91","distractionFreeMode":false,"proxy":"https://cors-anywhere.azm.workers.dev/https://github.com/login/oauth/access_token","language":"zh-CN"}')
+  param.id = location.pathname
+  const gitalk = new Gitalk(param)
+  gitalk.render('gitalk-container')
+</script>
+
+  
+
+  </body>
+</html>
