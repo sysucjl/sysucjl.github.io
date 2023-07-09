@@ -5,7 +5,7 @@
     <meta name="viewport" content="initial-scale=1.0, width=device-width" />
     <title>
       
-        service代理模式总结 | sysucjl.github.io
+        kube-flannel安装要点 | sysucjl.github.io
       
     </title>
     <meta name="description" content=""/>
@@ -64,19 +64,17 @@
   <article class="post-content">
     <div class="post-inner">
       <div class="post-content__head">
-        <div class="post-title">service代理模式总结</div>
+        <div class="post-title">kube-flannel安装要点</div>
         <div class="post-info">
           
   
-    <a href="/tags/k8s/" class="post-tag">#k8s</a>
+    <a href="/tags/CNI/" class="post-tag">#CNI</a>
   
-    <a href="/tags/network/" class="post-tag">#network</a>
-  
-    <a href="/tags/kube-proxy/" class="post-tag">#kube-proxy</a>
+    <a href="/tags/kube-flannel/" class="post-tag">#kube-flannel</a>
   
 
 
-          <span class="post-date">2022-07-02</span>
+          <span class="post-date">2022-08-12</span>
           
             <!-- 不蒜子统计 -->
             <span id="busuanzi_container_page_pv" style='display:none' class="<%= class_name %>">
@@ -96,45 +94,16 @@
             
           </div>
         
-        <p>Service资源的工作内容主要分为两大部分：</p>
-<ol type="1">
-<li><p><strong>控制器模块</strong>：主要包括<code>ServiceController</code>和<code>EndpointController</code>。<code>ServiceController</code>其实只处理了负载均衡类型的<code>Service</code>对象，它会调用云服务商的
-API
-接口，不同的云服务商会实现不同的适配器来创建<code>LoadBalancer</code>类型的资源；<code>Service</code>对象通过selector和pod建立关联。k8s会根据service对象关联到pod的podIP信息组合成一个endpoint。那么<code>EndpointController</code>就是同时订阅了<code>Service</code>对象和Pod资源对象的增删事件，从而映射生成相应的Endpoint对象。</p></li>
-<li><p><strong>kube-porxy</strong>：每个节点的kube-proxy负责监听APIServer中<code>Service</code>和<code>Endpoint</code>对象的变化情况，然后将变化信息写入本地<code>userspace/iptables/ipvs</code>，从而为节点内的客户端提供流量的转发和负载均衡等功能。</p></li>
+        <ol type="1">
+<li><p>先把官方的yaml模板下载下来，然后对关键字段逐个修改
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">wget https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml</span><br></pre></td></tr></table></figure></p></li>
+<li><p>如果服务器使用了多网卡，比如使用 vagrant 创建的虚拟机，默认上网的网卡
+IP
+为 10.2.0.15，这时候需要手动指定网卡的接口，否则会导致集群内节点之间的
+pod 无法互相通信。 <figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">vim</span> <span class="string">kube-flannel.yml</span></span><br><span class="line"><span class="string">...</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">kube-flannel</span></span><br><span class="line">        <span class="attr">image:</span> <span class="string">quay.io/coreos/flannel:v0.14.0</span></span><br><span class="line">        <span class="attr">command:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="string">/opt/bin/flanneld</span></span><br><span class="line">        <span class="attr">args:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="string">--ip-masq</span></span><br><span class="line">        <span class="bullet">-</span> <span class="string">--kube-subnet-mgr</span></span><br><span class="line">        <span class="bullet">-</span> <span class="string">--iface=eth1</span>  <span class="comment"># 新增,改成你自己对应的网卡名</span></span><br><span class="line"><span class="string">...</span></span><br></pre></td></tr></table></figure></p></li>
+<li><p><code>net-conf.json</code>参数，配置的是pod的网段，这里需要和kube-controller-manager的<code>--cluster-cidr</code>参数项保持一致
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">vim</span> <span class="string">kube-flannel.yml</span></span><br><span class="line"><span class="string">...</span></span><br><span class="line"><span class="attr">net-conf.json:</span> <span class="string">|</span></span><br><span class="line"><span class="string">  &#123;</span></span><br><span class="line"><span class="string">    &quot;Network&quot;: &quot;10.8.64.0/18&quot;,</span></span><br><span class="line"><span class="string">    &quot;Backend&quot;: &#123;</span></span><br><span class="line"><span class="string">      &quot;Type&quot;: &quot;vxlan&quot;</span></span><br><span class="line"><span class="string">    &#125;</span></span><br><span class="line"><span class="string">  &#125;</span></span><br><span class="line"><span class="string"></span><span class="string">...</span></span><br></pre></td></tr></table></figure></p></li>
 </ol>
-<p>那么目前kube-proxy对Service的代理模式主要有：<code>Userspace</code>、<code>Iptables</code>和<code>IPVS</code>三种</p>
-<h3 id="userspace已淘汰"><strong>Userspace</strong>（已淘汰）</h3>
-<p>该模式下，所有的客户端请求service对象，先经过iptables重定向，然后再经过kube-proxy代理到pod（相当于kube-proxy充当路由器，转发请求到对应的pod），导致频繁切换内核/用户空间，因此可靠性和性能都不理想，早已被淘汰。
-<img
-src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/userspace.png" /></p>
-<h3 id="iptables"><strong>Iptables</strong></h3>
-<p>该模式下直接使用 iptables
-转发当前节点上的全部流量，这种脱离了用户空间在内核空间中实现转发的方式能够极大地提高
-proxy 的效率，增加 kube-proxy
-的吞吐量。对于每个service，它都生成相应的iptables规则，这些规则捕获到service的clusterIP和port的流量，并将这些流量随机重定向到service后端Pod。对于每个endpoint对象，它生成选择后端Pod的iptables规则。但iptables
-因为它纯粹是为防火墙而设计的，并且基于内核规则列表，每次查询更新的复杂度是<span
-class="math inline">\(O(n)\)</span>，集群中service及其关联的pod越多，内核查询越繁忙。所以说，一直以来，基于
-iptables 的 Service 实现，都是制约 Kubernetes 项目承载更多量级的 Pod
-的主要障碍。 <img
-src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/iptable.png" /></p>
-<h3 id="ipvs"><strong>IPVS</strong></h3>
-<p>在这种模式下，kube-proxy同样监听API
-Server中service和endpoint的变化情况，调用netlink接口创建相应的ipvs规则，并定期将ipvs规则与Kubernetes服
-Services和Endpoints同步，保证IPVS状态。当访问Services时，IPVS将流量定向到后端pod之一。IPVS代理模式基于类似于
-iptables 模式的 netfilter 挂钩函数，
-但是使用哈希表作为基础数据结构（查询复杂度是<span
-class="math inline">\(O(1)\)</span>），并且在内核空间中工作。这意味着，与
-iptables 模式下的 kube-proxy 相比，IPVS 模式下的 kube-proxy
-重定向通信的延迟要短，并且在同步代理规则时具有更好的性能。除此之外，相较于Iptables模式：</p>
-<ul>
-<li>ipvs 为大型集群提供了更好的可扩展性和性能</li>
-<li>ipvs 支持比 iptables
-更复杂的负载均衡算法（最小负载、最少连接、加权等等）</li>
-<li>ipvs 支持服务器健康检查和连接重试等功能</li>
-</ul>
-<p><img
-src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/ipvs.png" /></p>
 
       </div>
 
@@ -171,7 +140,7 @@ src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/ipvs.png" /></p>
     
     <div class="post-nav">
   
-    <a class="post-nav-item-left" href="/2022/07/04/digital-certificate/">
+    <a class="post-nav-item-left" href="/2022/08/21/my-first-cat/">
       <div class="text-align">
         <svg t="1670570876164"
              class="icon"
@@ -182,12 +151,25 @@ src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/ipvs.png" /></p>
         </svg>
         <span class="text-small">上一篇</span>
       </div>
-      <div>数字证书原理</div>
+      <div>我的第一只猫</div>
     </a>
   
   <div class="vhr"></div>
   
-    <div class="post-nav-item-right"></div>
+    <a class="post-nav-item-right" href="/2022/08/04/ip-tunnel-introduction/">
+      <div class="text-align">
+        <span class="text-small">下一篇</span>
+        <svg t="1670570876164"
+             class="icon"
+             viewBox="0 0 1024 1024"
+             transform="scale(-1,-1)"
+             width="16"
+             height="16">
+          <path d="M384 512L731.733333 202.666667c17.066667-14.933333 19.2-42.666667 4.266667-59.733334-14.933333-17.066667-42.666667-19.2-59.733333-4.266666l-384 341.333333c-10.666667 8.533333-14.933333 19.2-14.933334 32s4.266667 23.466667 14.933334 32l384 341.333333c8.533333 6.4 19.2 10.666667 27.733333 10.666667 12.8 0 23.466667-4.266667 32-14.933333 14.933333-17.066667 14.933333-44.8-4.266667-59.733334L384 512z" p-id="14596"/>
+        </svg>
+      </div>
+      IP隧道介绍及演示
+    </a>
   
 </div>
 

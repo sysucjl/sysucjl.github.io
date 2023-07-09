@@ -5,7 +5,7 @@
     <meta name="viewport" content="initial-scale=1.0, width=device-width" />
     <title>
       
-        service代理模式总结 | sysucjl.github.io
+        数字证书原理 | sysucjl.github.io
       
     </title>
     <meta name="description" content=""/>
@@ -64,19 +64,17 @@
   <article class="post-content">
     <div class="post-inner">
       <div class="post-content__head">
-        <div class="post-title">service代理模式总结</div>
+        <div class="post-title">数字证书原理</div>
         <div class="post-info">
           
   
-    <a href="/tags/k8s/" class="post-tag">#k8s</a>
+    <a href="/tags/SSL/" class="post-tag">#SSL</a>
   
-    <a href="/tags/network/" class="post-tag">#network</a>
-  
-    <a href="/tags/kube-proxy/" class="post-tag">#kube-proxy</a>
+    <a href="/tags/Certificate/" class="post-tag">#Certificate</a>
   
 
 
-          <span class="post-date">2022-07-02</span>
+          <span class="post-date">2022-07-04</span>
           
             <!-- 不蒜子统计 -->
             <span id="busuanzi_container_page_pv" style='display:none' class="<%= class_name %>">
@@ -96,45 +94,43 @@
             
           </div>
         
-        <p>Service资源的工作内容主要分为两大部分：</p>
-<ol type="1">
-<li><p><strong>控制器模块</strong>：主要包括<code>ServiceController</code>和<code>EndpointController</code>。<code>ServiceController</code>其实只处理了负载均衡类型的<code>Service</code>对象，它会调用云服务商的
-API
-接口，不同的云服务商会实现不同的适配器来创建<code>LoadBalancer</code>类型的资源；<code>Service</code>对象通过selector和pod建立关联。k8s会根据service对象关联到pod的podIP信息组合成一个endpoint。那么<code>EndpointController</code>就是同时订阅了<code>Service</code>对象和Pod资源对象的增删事件，从而映射生成相应的Endpoint对象。</p></li>
-<li><p><strong>kube-porxy</strong>：每个节点的kube-proxy负责监听APIServer中<code>Service</code>和<code>Endpoint</code>对象的变化情况，然后将变化信息写入本地<code>userspace/iptables/ipvs</code>，从而为节点内的客户端提供流量的转发和负载均衡等功能。</p></li>
-</ol>
-<p>那么目前kube-proxy对Service的代理模式主要有：<code>Userspace</code>、<code>Iptables</code>和<code>IPVS</code>三种</p>
-<h3 id="userspace已淘汰"><strong>Userspace</strong>（已淘汰）</h3>
-<p>该模式下，所有的客户端请求service对象，先经过iptables重定向，然后再经过kube-proxy代理到pod（相当于kube-proxy充当路由器，转发请求到对应的pod），导致频繁切换内核/用户空间，因此可靠性和性能都不理想，早已被淘汰。
-<img
-src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/userspace.png" /></p>
-<h3 id="iptables"><strong>Iptables</strong></h3>
-<p>该模式下直接使用 iptables
-转发当前节点上的全部流量，这种脱离了用户空间在内核空间中实现转发的方式能够极大地提高
-proxy 的效率，增加 kube-proxy
-的吞吐量。对于每个service，它都生成相应的iptables规则，这些规则捕获到service的clusterIP和port的流量，并将这些流量随机重定向到service后端Pod。对于每个endpoint对象，它生成选择后端Pod的iptables规则。但iptables
-因为它纯粹是为防火墙而设计的，并且基于内核规则列表，每次查询更新的复杂度是<span
-class="math inline">\(O(n)\)</span>，集群中service及其关联的pod越多，内核查询越繁忙。所以说，一直以来，基于
-iptables 的 Service 实现，都是制约 Kubernetes 项目承载更多量级的 Pod
-的主要障碍。 <img
-src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/iptable.png" /></p>
-<h3 id="ipvs"><strong>IPVS</strong></h3>
-<p>在这种模式下，kube-proxy同样监听API
-Server中service和endpoint的变化情况，调用netlink接口创建相应的ipvs规则，并定期将ipvs规则与Kubernetes服
-Services和Endpoints同步，保证IPVS状态。当访问Services时，IPVS将流量定向到后端pod之一。IPVS代理模式基于类似于
-iptables 模式的 netfilter 挂钩函数，
-但是使用哈希表作为基础数据结构（查询复杂度是<span
-class="math inline">\(O(1)\)</span>），并且在内核空间中工作。这意味着，与
-iptables 模式下的 kube-proxy 相比，IPVS 模式下的 kube-proxy
-重定向通信的延迟要短，并且在同步代理规则时具有更好的性能。除此之外，相较于Iptables模式：</p>
+        <h3 id="非对称加密">非对称加密</h3>
+<p>在传统的加密算法中，通信的双方会采用一个共享秘钥来对数据进行加密和解密。消息发送方先采用秘钥对明文进行加密然后再进行传送，待接收方收到消息后，再采用秘钥对密文进行界面，以得到明文。由于加密和解密采用的秘钥是相同的，这种加密算法也称为对称加密。采用对称加密的通信过程如下图所示：</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/Snipaste_2023-07-09_12-23-24.png" alt="Snipaste_2023-07-09_12-23-24" style="zoom:50%;" /></p>
+<p>与传统的对称加密不同,非对称加密算法采用了两个密钥：公开密钥（publickey:简称公钥）和私有密钥（privatekey:简称私钥）。公钥与私钥是成对使用的，如果用公钥对数据进行加密，只有用对应的私钥才能解密；同样，使用私钥对数据进行加密，只有用对应的公钥才能解密。因为加密和解密使用的是两个不同的密钥，所以这种算法叫作非对称加密算法，也称为公开密钥加密。采用非对称加密的通信过程如下图所示：</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/Snipaste_2023-07-09_12-23-25.png" alt="Snipaste_2023-07-09_12-23-25" style="zoom:50%;" /></p>
+<p>使用对称加密算法需要双方事先交换加/解密用的共享秘钥，而交换的过程就存在密码泄露的风险。非对称加密的保密性比较好，因为它消除了通信双方交换秘钥（加密用的私钥）的需要。公钥是不需要进行保密的，可以对外进行公布，但加密后的信息只有私钥的拥有者才能进行解密。</p>
+<p>但是非对称加密的效率比对称加密低，因此在通信过程中一般会结合非对称加密和对称加密来实现数据加密传输。先通过非对称加密协商一个用于对称加密的共享秘钥，后续在传递数据时采用该对称加密秘钥匙来对数据加密，以在保证安全性的同时兼顾加密传输的效率。SSL/TLS就采用了类似的加密传输机制。</p>
+<h3 id="哈希函数">哈希函数</h3>
+<p>哈希函数是一个具有以下输入和输出的数学函数 H(X)=Y：</p>
 <ul>
-<li>ipvs 为大型集群提供了更好的可扩展性和性能</li>
-<li>ipvs 支持比 iptables
-更复杂的负载均衡算法（最小负载、最少连接、加权等等）</li>
-<li>ipvs 支持服务器健康检查和连接重试等功能</li>
+<li>H: 哈希函数，其输入参数为X，输出为Y。</li>
+<li>X: 哈希方法的输入，可以是任意长度的任意数据。</li>
+<li>Y：哈希方法的输出，是一段固定长度的二进制数据，长度可以是256,384,516…。</li>
 </ul>
-<p><img
-src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/ipvs.png" /></p>
+<p>用于加密的哈希函数有下面的特征：</p>
+<ul>
+<li><strong>无法找到产生相同输出的输入</strong>。从数学理论上来说，我们是可以找到具备相同输出的输入的，因为输入可以是任何数据，而输出则是固定长度的。但是对于一个好的哈希函数来说，我们就是使用地球上所有的计算机一起进行计算，也无法在可以接受的时间内找出该输入。</li>
+<li><strong>无法通过输出反推出输入</strong>。对于输入值的范围很大的情况来说，这是没有问题的，如果输入值是一个有限的集合，则很容易通过遍历尝试每一个输入值来推断出一个输出对应的输入。在这种情况下，我们可以为输入X加上一个随机值R来隐藏输入值，即
+H(R|X)=Y。由于攻击者不知道R的值，因此无法再通过遍历尝试每个输入的方法推断出Y对应的输入。这种做法被称为“加盐”，例如我们在存储密码时就会通过“加盐”的方法来避免彩虹表攻击。</li>
+</ul>
+<p>从上面哈希函数的的特点可以看出，一段数据的哈希值就是该数据的一个固定长度的，独一无二的“特征”，我们可以把哈希值看作该数据的“数字指纹”。</p>
+<h3 id="数字签名">数字签名</h3>
+<p>非对称加密加密一般是采用公钥进行加密而私钥进行解密。实际上我们也可以采用私钥进行加密，采用公钥进行解密。<strong>秘钥对的拥有者采用私钥对一段数据进行加密，然后公布密文，原文和公钥，任何人都可以使用公钥解密密文，然后核对原文和密文是否一致。由于私钥是不公开的，只有拥有者才能采用私钥对数据加密，所以这种方式可以用于证明发布这条消息的用户拥有消息中的公钥对应的私钥，这就是数字签名的基本原理</strong>。在数字证书，区块链，比特币中就采用了这种方法来验证用户身份。采用数学公式来表示数字签名的原理：</p>
+<ul>
+<li>消息发送者生成秘钥对： (sk,pk):= generates(keysize)</li>
+<li>消息发送者生成数字签名： signature := encrypt(sk, message)</li>
+<li>消息接收者验证发送者身份： isValid := isEqual(decrypt(pk,
+message),message)</li>
+</ul>
+<p>该方法直接对传递的原始数据进行加密，当数据很大时，对数据进行签名和传输的效率很低。此时我们可以通过哈希函数提取数据的特征值，然后只对数据的哈希值进行签名。由于哈希函数的特点，通过哈希值同样可以验证签名的私钥身份，同时还避免了对整段数据进行加密和传输的开销。采用哈希函数后的数字签名原理如下：
+- 消息发送者生成秘钥对： (sk,pk):= generates(keysize) -
+消息发送者生成数字签名： signature := encrypt(sk, hash(message)) -
+消息接受者验证发送者身份： isValid := isEqual(decrypt(pk,
+signature),hash(message))</p>
+<p>下图展示了数字签名和验证的流程：</p>
+<p><img src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/Snipaste_2023-07-09_12-23-26.png" alt="Snipaste_2023-07-09_12-23-26" style="zoom:50%;" /></p>
+<p>除了验证公钥拥有者的身份之外，数字签名还可以证明传输的数据没有被人恶意篡改，因为如果数据被篡改了，数据的哈希值就和解密后的签名对不上。</p>
 
       </div>
 
@@ -171,7 +167,7 @@ src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/ipvs.png" /></p>
     
     <div class="post-nav">
   
-    <a class="post-nav-item-left" href="/2022/07/04/digital-certificate/">
+    <a class="post-nav-item-left" href="/2022/07/15/k8s-api-note/">
       <div class="text-align">
         <svg t="1670570876164"
              class="icon"
@@ -182,12 +178,25 @@ src="https://picgo-1304754720.cos.ap-guangzhou.myqcloud.com/ipvs.png" /></p>
         </svg>
         <span class="text-small">上一篇</span>
       </div>
-      <div>数字证书原理</div>
+      <div>K8S API的使用和管理</div>
     </a>
   
   <div class="vhr"></div>
   
-    <div class="post-nav-item-right"></div>
+    <a class="post-nav-item-right" href="/2022/07/02/k8s-service-proxy-mode/">
+      <div class="text-align">
+        <span class="text-small">下一篇</span>
+        <svg t="1670570876164"
+             class="icon"
+             viewBox="0 0 1024 1024"
+             transform="scale(-1,-1)"
+             width="16"
+             height="16">
+          <path d="M384 512L731.733333 202.666667c17.066667-14.933333 19.2-42.666667 4.266667-59.733334-14.933333-17.066667-42.666667-19.2-59.733333-4.266666l-384 341.333333c-10.666667 8.533333-14.933333 19.2-14.933334 32s4.266667 23.466667 14.933334 32l384 341.333333c8.533333 6.4 19.2 10.666667 27.733333 10.666667 12.8 0 23.466667-4.266667 32-14.933333 14.933333-17.066667 14.933333-44.8-4.266667-59.733334L384 512z" p-id="14596"/>
+        </svg>
+      </div>
+      service代理模式总结
+    </a>
   
 </div>
 
